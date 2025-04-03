@@ -10,6 +10,10 @@ import Link from "next/link";
 import {toast} from "sonner";
 import FormField from "@/components/FormField";
 import {useRouter} from "next/navigation";
+import {createUserWithEmailAndPassword, signInWithEmailAndPassword} from "firebase/auth";
+import {auth} from "@/firebase/client";
+
+import {signIn,signUp} from "@/lib/actions/auth.action";
 
 
 
@@ -35,23 +39,48 @@ const formSchema = authFormSchema(type);
     })
 
     // 2. Define a submit handler.
-    function onSubmit(values: z.infer<typeof formSchema>) {
+    async function onSubmit(values: z.infer<typeof formSchema>) {
         // Do something with the form values.
         // ✅ This will be type-safe and validated.
         try {
             if (type === "sign-up") {
-                toast.success('Account successfully created!...please sign in.');
+                const {name, email, password} = values;
+                const userCredentials = await createUserWithEmailAndPassword(auth, email, password);
+
+                const result = await signUp({//if there is an erroor then it should be here .........................
+                    uid: userCredentials.user.uid,
+                    name: name,
+                    email, password,
+                })
+                if (!result?.success) {
+                    toast.error(result?.message);
+                    return
+                }
+
+
+                toast.success('Account created successfully. Please sign in.');
                 router.push("/sign-in");
-            }
-            else {
+            } else {
+
+                const {email, password} = values;
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                const idToken = await userCredential.user.getIdToken();
+                if(!idToken){
+                    toast.error('sign in failed')
+                    return;
+                }
+                await signIn({
+                    email, idToken
+                })
+
+
                 toast.success('Account successfully signed in.');
                 router.push("/");
             }
-        }
-        catch (error) {
+        } catch (error) {
 
-        console.log(error);
-        toast.error(`there is an error : ${error}`);
+            console.log(error);
+            toast.error(`there is an error : ${error}`);
         }
     }
     const isSignIn = type === 'sign-in';
